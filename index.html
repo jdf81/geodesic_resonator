@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Geodesic">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="A sound-reactive geodesic geometry instrument">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<title>Geodesic Resonator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Bricolage+Grotesque:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #050608;
+  --bg-2: #0a0d12;
+  --ink: #d6e4e8;
+  --ink-dim: #6c7a82;
+  --accent: #00ffb0;
+  --accent-dim: #007a55;
+  --warn: #ff6b3d;
+  --line: rgba(255,255,255,0.08);
+  --panel-bg: rgba(8, 10, 14, 0.92);
+  --hue: 162;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  /* dynamic viewport for iOS Safari address bar */
+  height: 100dvh;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(0,80,60,0.18), transparent 60%),
+    radial-gradient(ellipse at 30% 90%, rgba(60,30,90,0.10), transparent 50%),
+    var(--bg);
+}
+
+/* subtle grid overlay */
+#grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(circle at center, transparent 30%, black 80%);
+  -webkit-mask-image: radial-gradient(circle at center, transparent 30%, black 80%);
+}
+
+/* corner brackets HUD */
+.bracket {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--accent-dim);
+  pointer-events: none;
+  opacity: 0.6;
+}
+.bracket.tl { top: calc(env(safe-area-inset-top, 0) + 14px); left: 14px; border-right: 0; border-bottom: 0; }
+.bracket.tr { top: calc(env(safe-area-inset-top, 0) + 14px); right: 14px; border-left: 0; border-bottom: 0; }
+.bracket.bl { bottom: calc(env(safe-area-inset-bottom, 0) + 14px); left: 14px; border-right: 0; border-top: 0; }
+.bracket.br { bottom: calc(env(safe-area-inset-bottom, 0) + 14px); right: 14px; border-left: 0; border-top: 0; }
+
+/* Top status bar */
+#statusbar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#statusbar .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+  display: inline-block;
+}
+#statusbar .dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* level meter */
+#level-meter {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0) + 56px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140px;
+  height: 3px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#level-meter > div {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, hsl(var(--hue) 100% 50%), hsl(calc(var(--hue) + 60) 100% 60%));
+  transition: width 60ms linear;
+}
+
+/* Bottom HUD button row */
+#hud {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0) + 18px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 10;
+}
+
+.hud-btn {
+  background: rgba(10, 14, 18, 0.8);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 11px 18px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.hud-btn:active { transform: scale(0.96); }
+.hud-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 20px rgba(0, 255, 176, 0.18), inset 0 0 12px rgba(0, 255, 176, 0.06);
+}
+.hud-btn .led {
+  width: 6px;
+  height: 6px;
+  background: var(--ink-dim);
+  border-radius: 50%;
+}
+.hud-btn.active .led {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* Settings panel */
+#panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--panel-bg);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  border-top: 1px solid var(--line);
+  padding: 22px 18px calc(env(safe-area-inset-bottom, 0) + 22px);
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 20;
+  max-height: 78dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#panel.open { transform: translateY(0); }
+
+.panel-grip {
+  width: 38px;
+  height: 4px;
+  background: rgba(255,255,255,0.18);
+  border-radius: 2px;
+  margin: -8px auto 18px;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+.panel-header h2 {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.panel-header .meta {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.section { margin-bottom: 22px; }
+.section:last-child { margin-bottom: 0; }
+.section-label {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.section-label .value {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shape selector pills */
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.shape-pill {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  padding: 12px 4px;
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  text-align: center;
+}
+.shape-pill:active { transform: scale(0.96); }
+.shape-pill.active {
+  background: rgba(0, 255, 176, 0.07);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Sliders */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 28px;
+  background: transparent;
+  cursor: pointer;
+}
+.slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 1px;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: -7px;
+  box-shadow: 0 0 12px rgba(0, 255, 176, 0.6), 0 0 0 4px rgba(0, 255, 176, 0.08);
+  border: 2px solid #050608;
+}
+.slider::-moz-range-track {
+  height: 2px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 1px;
+}
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #050608;
+  box-shadow: 0 0 12px rgba(0, 255, 176, 0.6);
+}
+
+/* Hue slider with gradient track */
+.hue-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right,
+    hsl(0 100% 55%), hsl(60 100% 55%), hsl(120 100% 55%),
+    hsl(180 100% 55%), hsl(240 100% 65%), hsl(300 100% 60%), hsl(360 100% 55%));
+}
+.hue-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right,
+    hsl(0 100% 55%), hsl(60 100% 55%), hsl(120 100% 55%),
+    hsl(180 100% 55%), hsl(240 100% 65%), hsl(300 100% 60%), hsl(360 100% 55%));
+}
+.hue-slider::-webkit-slider-thumb {
+  margin-top: -6px;
+  background: white;
+}
+.hue-slider::-moz-range-thumb {
+  background: white;
+}
+
+/* Toggle row */
+.toggle-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.toggle {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  padding: 12px;
+  font-family: inherit;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.toggle:active { transform: scale(0.97); }
+.toggle.active {
+  background: rgba(0, 255, 176, 0.07);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.toggle-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-dim);
+}
+.toggle.active .toggle-dot {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+/* Intro overlay */
+#intro {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+  transition: opacity 0.6s ease;
+}
+#intro.gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.intro-eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+#intro h1 {
+  font-family: 'Bricolage Grotesque', sans-serif;
+  font-weight: 800;
+  font-size: clamp(36px, 9vw, 64px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  margin-bottom: 16px;
+  background: linear-gradient(180deg, #fff 0%, #6c7a82 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+#intro p {
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  max-width: 320px;
+  margin-bottom: 36px;
+}
+#start {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: 16px 32px;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+#start:active { transform: scale(0.97); }
+#start::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 255, 176, 0.08);
+  transform: translateX(-101%);
+  transition: transform 0.4s ease;
+}
+#start:hover::after { transform: translateX(0); }
+#start span { position: relative; }
+
+.intro-foot {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom, 0) + 24px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.diag-line {
+  width: 60px;
+  height: 1px;
+  background: var(--accent-dim);
+  margin: 24px auto;
+}
+
+/* Reset and link buttons */
+.text-btn {
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  font-family: inherit;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.text-btn:active { color: var(--accent); }
+
+/* error pill */
+#err {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0) + 80px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 70, 50, 0.1);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  padding: 10px 14px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: none;
+  max-width: 86vw;
+  text-align: center;
+  line-height: 1.5;
+}
+#err.show { display: block; }
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+<div id="grid"></div>
+
+<span class="bracket tl"></span>
+<span class="bracket tr"></span>
+<span class="bracket bl"></span>
+<span class="bracket br"></span>
+
+<div id="statusbar">
+  <span class="dot" id="mic-dot"></span>
+  <span id="status-text">RESONATOR · STANDBY</span>
+</div>
+
+<div id="level-meter"><div id="level-fill"></div></div>
+
+<div id="err"></div>
+
+<!-- Bottom HUD -->
+<div id="hud">
+  <button class="hud-btn" id="mic-btn">
+    <span class="led"></span>
+    <span>Mic</span>
+  </button>
+  <button class="hud-btn" id="panel-btn">
+    <span>Tune ⌃</span>
+  </button>
+</div>
+
+<!-- Settings Panel -->
+<div id="panel">
+  <div class="panel-grip"></div>
+
+  <div class="panel-header">
+    <h2>Tune</h2>
+    <span class="meta">v1.0 · live</span>
+  </div>
+
+  <div class="section">
+    <div class="section-label"><span>Geometry</span></div>
+    <div class="shape-grid">
+      <button class="shape-pill active" data-shape="icosahedron">Icosa</button>
+      <button class="shape-pill" data-shape="octahedron">Octa</button>
+      <button class="shape-pill" data-shape="tetrahedron">Tetra</button>
+      <button class="shape-pill" data-shape="dodecahedron">Dodec</button>
+      <button class="shape-pill" data-shape="sphere">Sphere</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">
+      <span>Complexity</span>
+      <span class="value" id="complexity-val">2</span>
+    </div>
+    <input type="range" class="slider" id="complexity" min="0" max="5" step="1" value="2">
+  </div>
+
+  <div class="section">
+    <div class="section-label">
+      <span>Scale</span>
+      <span class="value" id="size-val">1.00</span>
+    </div>
+    <input type="range" class="slider" id="size" min="0.4" max="2.5" step="0.01" value="1.0">
+  </div>
+
+  <div class="section">
+    <div class="section-label">
+      <span>Hue</span>
+      <span class="value" id="hue-val">162°</span>
+    </div>
+    <input type="range" class="slider hue-slider" id="hue" min="0" max="360" step="1" value="162">
+  </div>
+
+  <div class="section">
+    <div class="section-label">
+      <span>Sensitivity</span>
+      <span class="value" id="sens-val">0.55</span>
+    </div>
+    <input type="range" class="slider" id="sensitivity" min="0" max="2" step="0.01" value="0.55">
+  </div>
+
+  <div class="section">
+    <div class="section-label">
+      <span>Spin</span>
+      <span class="value" id="spin-val">0.30</span>
+    </div>
+    <input type="range" class="slider" id="spin" min="0" max="2" step="0.01" value="0.3">
+  </div>
+
+  <div class="section">
+    <div class="section-label"><span>Render</span></div>
+    <div class="toggle-row">
+      <button class="toggle active" id="solid-toggle">
+        <span class="toggle-dot"></span> Solid
+      </button>
+      <button class="toggle active" id="wire-toggle">
+        <span class="toggle-dot"></span> Wireframe
+      </button>
+    </div>
+  </div>
+
+  <div class="section" style="display:flex; justify-content:space-between; align-items:center; padding-top: 6px;">
+    <button class="text-btn" id="reset-btn">↺ Reset Defaults</button>
+    <button class="text-btn" id="close-panel">Close ✕</button>
+  </div>
+</div>
+
+<!-- Intro Overlay -->
+<div id="intro">
+  <div class="intro-eyebrow">◇ Geodesic Resonator</div>
+  <h1>Sound,<br>made shape.</h1>
+  <p>Let the mic listen, and watch the geometry breathe with what it hears.</p>
+  <div class="diag-line"></div>
+  <button id="start"><span>◢ ENGAGE ◣</span></button>
+  <div class="intro-foot">Tap to begin · Mic permission required</div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.1/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ----------------------------- STATE ----------------------------- */
+const state = {
+  shape: 'icosahedron',
+  complexity: 2,
+  size: 1.0,
+  hue: 162,
+  sensitivity: 0.55,
+  spin: 0.30,
+  solid: true,
+  wireframe: true,
+  micOn: false,
+};
+
+const DEFAULTS = { ...state };
+
+// load saved state
+try {
+  const saved = JSON.parse(localStorage.getItem('geodesic.v1') || 'null');
+  if (saved) Object.assign(state, saved);
+} catch (e) {}
+
+const persist = () => {
+  try { localStorage.setItem('geodesic.v1', JSON.stringify(state)); } catch (e) {}
+};
+
+/* ---------------------------- THREE.JS --------------------------- */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+camera.position.set(0, 0, 5);
+
+// lights
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.6);
+keyLight.position.set(2, 3, 4);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0x88ccff, 0.5);
+fillLight.position.set(-3, -2, 2);
+scene.add(fillLight);
+const ambient = new THREE.AmbientLight(0xffffff, 0.18);
+scene.add(ambient);
+
+// rim point light, color matches accent — updated when hue changes
+const rim = new THREE.PointLight(0x00ffb0, 1.0, 8);
+rim.position.set(0, 0, -3);
+scene.add(rim);
+
+// the geodesic group: mesh + wireframe overlay
+const group = new THREE.Group();
+scene.add(group);
+
+let mesh = null;        // solid
+let wire = null;        // wireframe
+let basePositions = null;  // Float32Array, original undisplaced positions
+let baseScale = 1.5;
+
+const solidMat = new THREE.MeshStandardMaterial({
+  color: new THREE.Color('#00ffb0'),
+  metalness: 0.4,
+  roughness: 0.25,
+  emissive: new THREE.Color('#003020'),
+  emissiveIntensity: 0.4,
+  flatShading: true,
+  transparent: true,
+  opacity: 0.85,
+});
+
+const wireMat = new THREE.LineBasicMaterial({
+  color: new THREE.Color('#00ffb0'),
+  transparent: true,
+  opacity: 0.95,
+});
+
+function buildGeometry() {
+  // dispose previous
+  if (mesh) {
+    group.remove(mesh);
+    mesh.geometry.dispose();
+    mesh = null;
+  }
+  if (wire) {
+    group.remove(wire);
+    wire.geometry.dispose();
+    wire = null;
+  }
+
+  let geo;
+  const r = 1; // base radius, we scale via group
+  const detail = state.complexity;
+  switch (state.shape) {
+    case 'octahedron':   geo = new THREE.OctahedronGeometry(r, detail); break;
+    case 'tetrahedron':  geo = new THREE.TetrahedronGeometry(r, detail); break;
+    case 'dodecahedron': geo = new THREE.DodecahedronGeometry(r, detail); break;
+    case 'sphere':       geo = new THREE.SphereGeometry(r, 16 + detail * 8, 12 + detail * 6); break;
+    case 'icosahedron':
+    default:             geo = new THREE.IcosahedronGeometry(r, detail); break;
+  }
+
+  // Save original positions for reset each frame
+  const posAttr = geo.attributes.position;
+  basePositions = new Float32Array(posAttr.array.length);
+  basePositions.set(posAttr.array);
+
+  // Solid mesh
+  mesh = new THREE.Mesh(geo, solidMat);
+  mesh.visible = state.solid;
+  group.add(mesh);
+
+  // Wireframe overlay — full triangulation (consistent across all shapes incl. sphere)
+  const edges = new THREE.WireframeGeometry(geo);
+  wire = new THREE.LineSegments(edges, wireMat);
+  wire.visible = state.wireframe;
+  group.add(wire);
+
+  applyVisualState();
+}
+
+function applyVisualState() {
+  document.documentElement.style.setProperty('--hue', String(state.hue));
+
+  const baseColor = new THREE.Color().setHSL(state.hue / 360, 1.0, 0.55);
+  const emissive = new THREE.Color().setHSL(state.hue / 360, 0.9, 0.18);
+  const wireColor = new THREE.Color().setHSL(state.hue / 360, 1.0, 0.7);
+
+  solidMat.color.copy(baseColor);
+  solidMat.emissive.copy(emissive);
+  wireMat.color.copy(wireColor);
+  rim.color.copy(baseColor);
+
+  group.scale.setScalar(state.size * baseScale);
+  if (mesh) mesh.visible = state.solid;
+  if (wire) wire.visible = state.wireframe;
+
+  // Always keep at least one visible to avoid invisible state
+  if (!state.solid && !state.wireframe) {
+    state.wireframe = true;
+    if (wire) wire.visible = true;
+    document.getElementById('wire-toggle').classList.add('active');
+  }
+}
+
+function resize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ----------------------------- AUDIO ----------------------------- */
+let audioCtx = null;
+let analyser = null;
+let micStream = null;
+let freqData = null;
+let timeData = null;
+let smoothLevel = 0;
+
+async function startMic() {
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Microphone API unavailable in this browser.');
+    }
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      }
+    });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.78;
+    source.connect(analyser);
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    timeData = new Uint8Array(analyser.fftSize);
+    state.micOn = true;
+    updateMicUI();
+    hideError();
+  } catch (e) {
+    console.error(e);
+    state.micOn = false;
+    updateMicUI();
+    let msg = 'Mic blocked. Allow microphone access in Safari settings.';
+    if (e && e.name === 'NotAllowedError') msg = 'Permission denied. Enable mic for Safari to continue.';
+    else if (e && e.name === 'NotFoundError') msg = 'No microphone detected on this device.';
+    else if (e && e.message) msg = e.message;
+    showError(msg);
+  }
+}
+
+function stopMic() {
+  if (micStream) {
+    micStream.getTracks().forEach(t => t.stop());
+    micStream = null;
+  }
+  if (audioCtx) {
+    audioCtx.close().catch(() => {});
+    audioCtx = null;
+  }
+  analyser = null;
+  freqData = null;
+  timeData = null;
+  smoothLevel = 0;
+  state.micOn = false;
+  updateMicUI();
+  document.getElementById('level-fill').style.width = '0%';
+}
+
+function showError(msg) {
+  const el = document.getElementById('err');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showError._t);
+  showError._t = setTimeout(() => el.classList.remove('show'), 5500);
+}
+function hideError() {
+  document.getElementById('err').classList.remove('show');
+}
+
+function updateMicUI() {
+  const btn = document.getElementById('mic-btn');
+  const dot = document.getElementById('mic-dot');
+  const txt = document.getElementById('status-text');
+  if (state.micOn) {
+    btn.classList.add('active');
+    dot.classList.add('active');
+    txt.textContent = 'RESONATOR · LIVE';
+  } else {
+    btn.classList.remove('active');
+    dot.classList.remove('active');
+    txt.textContent = 'RESONATOR · STANDBY';
+  }
+}
+
+/* --------------------------- ANIMATION --------------------------- */
+const clock = new THREE.Clock();
+let frame = 0;
+const tmpVec = new THREE.Vector3();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  frame++;
+
+  // Audio analysis
+  let bass = 0, mid = 0, treble = 0, level = 0;
+  if (analyser) {
+    analyser.getByteFrequencyData(freqData);
+    const N = freqData.length;
+    const b1 = Math.floor(N * 0.10);
+    const b2 = Math.floor(N * 0.35);
+    let sumB = 0, sumM = 0, sumT = 0;
+    for (let i = 0; i < b1; i++) sumB += freqData[i];
+    for (let i = b1; i < b2; i++) sumM += freqData[i];
+    for (let i = b2; i < N; i++) sumT += freqData[i];
+    bass = sumB / (b1 * 255);
+    mid = sumM / ((b2 - b1) * 255);
+    treble = sumT / ((N - b2) * 255);
+    level = bass * 0.55 + mid * 0.3 + treble * 0.15;
+    smoothLevel = smoothLevel * 0.82 + level * 0.18;
+
+    // level meter
+    const fill = document.getElementById('level-fill');
+    fill.style.width = Math.min(100, smoothLevel * 130) + '%';
+  }
+
+  // Rotation — auto spin, slightly nudged by mid energy
+  group.rotation.y += dt * (state.spin + mid * 0.6);
+  group.rotation.x += dt * (state.spin * 0.4 + bass * 0.3);
+
+  // Vertex displacement
+  if (mesh && basePositions) {
+    const posAttr = mesh.geometry.attributes.position;
+    const arr = posAttr.array;
+    const t = clock.getElapsedTime();
+    const sens = state.sensitivity;
+
+    for (let i = 0; i < arr.length; i += 3) {
+      const ox = basePositions[i];
+      const oy = basePositions[i + 1];
+      const oz = basePositions[i + 2];
+      const len = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+      const nx = ox / len, ny = oy / len, nz = oz / len;
+
+      // pick freq bin based on vertex position (latitude + spatial seed)
+      let amp = 0;
+      if (analyser) {
+        const phi = Math.atan2(ny, Math.sqrt(nx * nx + nz * nz)); // -pi/2..pi/2
+        const u = (phi + Math.PI / 2) / Math.PI;                  // 0..1
+        const seed = Math.abs((nx * 12.3 + nz * 7.7) % 1);
+        const idx = Math.floor((u * 0.7 + seed * 0.3) * (freqData.length - 1));
+        amp = freqData[idx] / 255;
+      }
+
+      // gentle noise wave for life even without sound
+      const wave =
+        0.04 * Math.sin(t * 1.4 + ox * 3.0) +
+        0.03 * Math.sin(t * 2.1 + oy * 4.2) +
+        0.03 * Math.sin(t * 1.7 + oz * 3.6);
+
+      const disp = wave + amp * sens * (0.6 + smoothLevel * 0.8);
+      arr[i]     = ox + nx * disp;
+      arr[i + 1] = oy + ny * disp;
+      arr[i + 2] = oz + nz * disp;
+    }
+    posAttr.needsUpdate = true;
+    mesh.geometry.computeVertexNormals();
+    mesh.geometry.computeBoundingSphere();
+
+    // Rebuild wireframe edges occasionally (cheap visual sync)
+    if (wire && frame % 2 === 0) {
+      const newEdges = new THREE.WireframeGeometry(mesh.geometry);
+      wire.geometry.dispose();
+      wire.geometry = newEdges;
+    }
+  }
+
+  // Subtle "breathing" scale when no audio
+  if (!analyser) {
+    const t = clock.getElapsedTime();
+    const breath = 1 + Math.sin(t * 0.9) * 0.015;
+    group.scale.setScalar(state.size * baseScale * breath);
+  } else {
+    const punch = 1 + smoothLevel * 0.18;
+    group.scale.setScalar(state.size * baseScale * punch);
+  }
+
+  renderer.render(scene, camera);
+}
+
+/* ------------------------ TOUCH / DRAG ROTATE ------------------- */
+let dragging = false;
+let lastX = 0, lastY = 0;
+let userYaw = 0, userPitch = 0;
+
+const onPointerDown = (e) => {
+  // ignore drags that begin over UI
+  const t = e.target;
+  if (t.closest('#panel') || t.closest('#hud') || t.closest('#intro')) return;
+  dragging = true;
+  const p = e.touches ? e.touches[0] : e;
+  lastX = p.clientX;
+  lastY = p.clientY;
+};
+const onPointerMove = (e) => {
+  if (!dragging) return;
+  const p = e.touches ? e.touches[0] : e;
+  const dx = p.clientX - lastX;
+  const dy = p.clientY - lastY;
+  lastX = p.clientX;
+  lastY = p.clientY;
+  group.rotation.y += dx * 0.005;
+  group.rotation.x += dy * 0.005;
+};
+const onPointerUp = () => { dragging = false; };
+
+window.addEventListener('mousedown', onPointerDown);
+window.addEventListener('mousemove', onPointerMove);
+window.addEventListener('mouseup', onPointerUp);
+window.addEventListener('touchstart', onPointerDown, { passive: true });
+window.addEventListener('touchmove', onPointerMove, { passive: true });
+window.addEventListener('touchend', onPointerUp);
+
+/* ----------------------------- UI -------------------------------- */
+function bindControls() {
+  // Shape pills
+  document.querySelectorAll('.shape-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.shape-pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.shape = btn.dataset.shape;
+      buildGeometry();
+      persist();
+    });
+  });
+
+  const bindSlider = (id, prop, fmt) => {
+    const el = document.getElementById(id);
+    const out = document.getElementById(id + '-val');
+    el.value = state[prop];
+    if (out) out.textContent = fmt ? fmt(state[prop]) : state[prop];
+    el.addEventListener('input', () => {
+      state[prop] = parseFloat(el.value);
+      if (out) out.textContent = fmt ? fmt(state[prop]) : state[prop];
+      if (id === 'complexity') buildGeometry();
+      else applyVisualState();
+      persist();
+    });
+  };
+  bindSlider('complexity', 'complexity', v => Math.round(v));
+  bindSlider('size', 'size', v => v.toFixed(2));
+  bindSlider('hue', 'hue', v => Math.round(v) + '°');
+  bindSlider('sensitivity', 'sensitivity', v => v.toFixed(2));
+  bindSlider('spin', 'spin', v => v.toFixed(2));
+
+  // Toggles
+  const solidBtn = document.getElementById('solid-toggle');
+  const wireBtn = document.getElementById('wire-toggle');
+  solidBtn.classList.toggle('active', state.solid);
+  wireBtn.classList.toggle('active', state.wireframe);
+
+  solidBtn.addEventListener('click', () => {
+    state.solid = !state.solid;
+    if (!state.solid && !state.wireframe) state.wireframe = true; // keep visible
+    solidBtn.classList.toggle('active', state.solid);
+    wireBtn.classList.toggle('active', state.wireframe);
+    applyVisualState();
+    persist();
+  });
+  wireBtn.addEventListener('click', () => {
+    state.wireframe = !state.wireframe;
+    if (!state.solid && !state.wireframe) state.solid = true;
+    solidBtn.classList.toggle('active', state.solid);
+    wireBtn.classList.toggle('active', state.wireframe);
+    applyVisualState();
+    persist();
+  });
+
+  // Active shape on load
+  document.querySelectorAll('.shape-pill').forEach(b => {
+    b.classList.toggle('active', b.dataset.shape === state.shape);
+  });
+
+  // Panel
+  const panel = document.getElementById('panel');
+  document.getElementById('panel-btn').addEventListener('click', () => {
+    panel.classList.toggle('open');
+  });
+  document.getElementById('close-panel').addEventListener('click', () => {
+    panel.classList.remove('open');
+  });
+
+  // Reset
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    Object.assign(state, DEFAULTS);
+    state.micOn = (audioCtx && analyser) ? true : false;
+    // Re-sync UI
+    document.querySelectorAll('.shape-pill').forEach(b => {
+      b.classList.toggle('active', b.dataset.shape === state.shape);
+    });
+    document.getElementById('complexity').value = state.complexity;
+    document.getElementById('complexity-val').textContent = state.complexity;
+    document.getElementById('size').value = state.size;
+    document.getElementById('size-val').textContent = state.size.toFixed(2);
+    document.getElementById('hue').value = state.hue;
+    document.getElementById('hue-val').textContent = state.hue + '°';
+    document.getElementById('sensitivity').value = state.sensitivity;
+    document.getElementById('sens-val').textContent = state.sensitivity.toFixed(2);
+    document.getElementById('spin').value = state.spin;
+    document.getElementById('spin-val').textContent = state.spin.toFixed(2);
+    document.getElementById('solid-toggle').classList.toggle('active', state.solid);
+    document.getElementById('wire-toggle').classList.toggle('active', state.wireframe);
+    buildGeometry();
+    persist();
+  });
+
+  // Mic button
+  document.getElementById('mic-btn').addEventListener('click', async () => {
+    if (state.micOn) stopMic();
+    else await startMic();
+  });
+
+  // Intro engage
+  document.getElementById('start').addEventListener('click', async () => {
+    document.getElementById('intro').classList.add('gone');
+    setTimeout(() => { document.getElementById('intro').style.display = 'none'; }, 700);
+    // start mic on user gesture (required by iOS)
+    await startMic();
+  });
+}
+
+/* --------------------------- INIT -------------------------------- */
+buildGeometry();
+bindControls();
+animate();
+
+// register service worker (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// pause/resume mic if app backgrounds (iOS sometimes suspends audio)
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden) return;
+  if (audioCtx && audioCtx.state === 'suspended') {
+    try { await audioCtx.resume(); } catch (e) {}
+  }
+});
+</script>
+</body>
+</html>
